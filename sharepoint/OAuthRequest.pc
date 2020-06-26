@@ -1,0 +1,117 @@
+import PSDEV:RequestHelper;
+import EOEW_ETLAPI:COMMON:HashTable;
+
+class OAuthRequest
+   method OAuthRequest();
+   method readConfig(&set_id As number, &id As number);
+   method getBearer() Returns string;
+   method getDigest(&p_bearer As string) Returns string;
+   method getSiteUrl() Returns string;
+private
+   method getQueryParams() Returns JsonObject;
+   method getRequestBody() Returns string;
+   
+   instance JsonObject &config;
+   instance PSDEV:RequestHelper &req;
+end-class;
+
+method OAuthRequest
+   &req = create PSDEV:RequestHelper();
+end-method;
+
+method getSiteUrl
+   /+ Returns String +/
+   Return &config.GetString("OAuth.SP.siteUri");
+end-method;
+
+method getDigest
+   /+ &p_bearer as String +/
+   /+ Returns String +/
+   Local JsonObject &params = %This.getQueryParams();
+   
+   Local string &url = &params.GetString("OAuth.SP.siteUri") | "/_api/contextinfo";
+   &req.setUrl(&url);
+   try
+      Local JsonObject &response = &req.getDigest(&p_bearer);
+      Return &response.GetAsString("FormDigestValue");
+   catch Exception &ex
+      WriteToLog(1, &ex.ToString());
+   end-try;
+   
+   Return "";
+end-method;
+
+method getBearer
+   /+ Returns String +/
+   Local JsonObject &params = %This.getQueryParams();
+   
+   Local string &url = &params.GetString("OAuth.SP.targetUrl");
+   Local string &method = &params.GetString("OAuth.SP.method");
+   Local string &request = %This.getRequestBody();
+   
+   &req.setUrl(&url);
+   try
+      Local JsonObject &response = &req.getBearer(&request);
+      Return &response.GetAsString("access_token");
+   catch Exception &ex
+      WriteToLog(1, &ex.ToString());
+   end-try;
+   Return "";
+end-method;
+
+method getQueryParams
+   /+ Returns JsonObject +/
+   Return &config;
+end-method;
+
+method getRequestBody
+   /+ Returns String +/
+   
+   Local string &clientId = &config.GetString("OAuth.SP.clientId");
+   Local string &clientSecret = &config.GetString("OAuth.SP.clientSecret");
+   Local string &principal = &config.GetString("OAuth.SP.principal");
+   Local string &targetHost = &config.GetString("OAuth.SP.targetHost");
+   Local string &realm = &config.GetString("OAuth.SP.realm");
+   Local string &resource = &principal | "/" | &targetHost | "@" | &realm;
+   
+   Local array of string &params = CreateArrayRept("", 0);
+   &params.Push("grant_type");
+   &params.Push("client_credentials");
+   
+   &params.Push("client_id");
+   &params.Push(&clientId | "@" | &realm);
+   
+   &params.Push("client_secret");
+   &params.Push(&clientSecret);
+   
+   &params.Push("resource");
+   &params.Push(&resource);
+   
+   Local number &i;
+   Local string &result = "";
+   Local boolean &isFirst = True;
+   For &i = 1 To &params.Len Step 2
+      If &isFirst Then
+         &isFirst = False;
+      Else
+         &result = &result | "&";
+      End-If;
+      
+      &result = &result | &params [&i] | "=" | EncodeURLForQueryString(&params [&i + 1]);
+   End-For;
+   Return &result;
+end-method;
+
+method readConfig
+   /+ &set_id as Number, +/
+   /+ &id as Number +/
+   Local string &str = "{""OAuth.SP.clientId"": "" "",";
+   &str = &str | """OAuth.SP.clientSecret"": "" "", ";
+   &str = &str | """OAuth.SP.principal"": ""00000003-0000-0ff1-ce00-000000000000"",";
+   &str = &str | """OAuth.SP.targetHost"": ""mysite.sharepoint.com"", ";
+   &str = &str | """OAuth.SP.realm"": "" "", ";
+   &str = &str | """OAuth.SP.targetUrl"": ""https://accounts.accesscontrol.windows.net/ > SAME AS OAuth.SP.realm < /tokens/OAuth/2"", ""OAuth.SP.siteUri"": ""https://mysite.sharepoint.com/sites/SITE_NAME""}";
+   
+   %This.config = &req.parseJson(&str);
+end-method;
+
