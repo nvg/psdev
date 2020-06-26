@@ -1,0 +1,120 @@
+import EOEW_ETLAPI:COMMON:HashTable;
+
+class RequestHelper
+   method RequestHelper();
+   method setUrl(&sURL As string);
+   method getDigest(&BearerToken As string) Returns JsonObject;
+   method getBearer(&Request As string) Returns JsonObject;
+   method parseJson(&sResponse As string) Returns JsonObject;
+   method generateQueryString() Returns string;
+   
+   property EOEW_ETLAPI:COMMON:HashTable queryParams;
+   
+private
+   instance string &RequestURL;
+end-class;
+
+method RequestHelper
+   %This.queryParams = create EOEW_ETLAPI:COMMON:HashTable();
+end-method;
+
+method setUrl
+   /+ &sURL as String +/
+   &RequestURL = &sURL;
+end-method;
+
+method getBearer
+   /+ &Request as String +/
+   /+ Returns JsonObject +/
+   
+   Local JavaObject &jHttp = CreateJavaObject("org.apache.commons.httpclient.HttpClient");
+   &jHttp.getHttpConnectionManager().getParams().setConnectionTimeout(10000);
+   Local JavaObject &jMethod = CreateJavaObject("org.apache.commons.httpclient.methods.PostMethod", %This.RequestURL);
+   &jMethod.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+   &jMethod.setRequestBody(&Request);
+   
+   try
+      &jHttp.executeMethod(&jMethod);
+      
+      Local integer &responseStatus = &jMethod.getStatusLine().getStatusCode();
+      If (&responseStatus = 200) Then
+         Local string &sResponse = &jMethod.getResponseBodyAsString();
+      Else
+         throw CreateException(0, 0, "Error Response. STATUS - " | &responseStatus);
+      End-If;
+   catch Exception &e
+      WriteToLog(1, &e.ToString());
+   end-try;
+   
+   &jMethod.releaseConnection();
+   
+   Return %This.parseJson(&sResponse);
+end-method;
+
+method getDigest
+   /+ &BearerToken as String +/
+   /+ Returns JsonObject +/
+   Local JavaObject &jHttp = CreateJavaObject("org.apache.commons.httpclient.HttpClient");
+   &jHttp.getHttpConnectionManager().getParams().setConnectionTimeout(10000);
+   
+   Local JavaObject &jMethod = CreateJavaObject("org.apache.commons.httpclient.methods.PostMethod", %This.RequestURL);
+   &jMethod.setRequestHeader("Authorization", "Bearer " | &BearerToken);
+   &jMethod.setRequestHeader("Accept", "application/json");
+   
+   Local string &sResponse;
+   try
+      &jHttp.executeMethod(&jMethod);
+      
+      Local integer &responseStatus = &jMethod.getStatusLine().getStatusCode();
+      If (&responseStatus = 200) Then
+         &sResponse = &jMethod.getResponseBodyAsString();
+      Else
+         throw CreateException(0, 0, "Error Response. STATUS - " | &responseStatus);
+      End-If;
+   catch Exception &e
+      WriteToLog(1, &e.ToString());
+   end-try;
+   
+   &jMethod.releaseConnection();
+   Return %This.parseJson(&sResponse);
+end-method;
+
+method parseJson
+   /+ &sResponse as String +/
+   /+ Returns JsonObject +/
+   Local JsonObject &jsonResponse;
+   try
+      Local JsonParser &jsonParser = CreateJsonParser();
+      If &jsonParser.Parse(&sResponse) Then
+         &jsonResponse = &jsonParser.GetRootObject();
+      End-If;
+   catch Exception &exJsonParser
+      throw CreateException(0, 0, "Error : " | &exJsonParser.ToString() | " " | &sResponse);
+   end-try;
+   
+   Return &jsonResponse;
+end-method;
+
+method generateQueryString
+   /+ Returns String +/
+   Local array of string &arrQueryValue;
+   Local string &sQuery;
+   Local number &nCnt;
+   
+   &arrQueryValue = %This.queryParams.GetValues();
+   
+   For &nCnt = 1 To &arrQueryValue.Len
+      If All(&arrQueryValue [&nCnt]) Then
+         If &nCnt > 1 Then
+            &sQuery = &sQuery | "&";
+         End-If;
+         &sQuery = &sQuery | %This.queryParams.GetNameByIndex(&nCnt) | "=" | EncodeURLForQueryString(&arrQueryValue [&nCnt]);
+      End-If;
+   End-For;
+   
+   If All(&sQuery) Then
+      &sQuery = "?" | &sQuery;
+   End-If;
+   Return &sQuery;
+end-method;
+

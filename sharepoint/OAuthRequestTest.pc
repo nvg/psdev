@@ -1,0 +1,42 @@
+import PSDEV:O365:OAuthRequest;
+import TTS_UNITTEST:TestBase;
+
+class OAuthRequestTest extends TTS_UNITTEST:TestBase
+   method OAuthRequestTest();
+   method Run();
+   method Setup();
+protected
+   
+private
+   instance string &someValue;
+end-class;
+
+Component string &messages;
+
+method OAuthRequestTest
+   %Super = create TTS_UNITTEST:TestBase("OAuthRequestTest");
+   &someValue = "";
+end-method;
+
+method Setup
+   /+ Extends/implements TTS_UNITTEST:TestBase.Setup +/
+end-method;
+
+method Run
+   /+ Extends/implements TTS_UNITTEST:TestBase.Run +/
+   &messages = "";
+   %This.Msg("Starting Run()");
+   Local PSDEV:O365:OAuthRequest &req = create PSDEV:O365:OAuthRequest();
+   &req.readConfig(0, 0);
+   %This.Msg("Read config");
+   
+   Local string &token = &req.getBearer();
+   %This.Msg("TOKEN: " | &token);
+   %This.AssertStringsDiffer(&token, "", "Expected Non Empty Token");
+   
+   Local string &digest = &req.getDigest(&token);
+   %This.Msg("DIGEST: " | &digest);
+   %This.AssertStringsDiffer(&digest, "", "Expected Non Empty Digest");
+   %This.Msg("Finished Run()");
+end-method;
+
